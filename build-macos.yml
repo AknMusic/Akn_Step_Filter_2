@@ -1,0 +1,48 @@
+name: Build macOS Universal VST3
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+jobs:
+  build:
+    runs-on: macos-15
+
+    steps:
+      - name: Checkout plugin source
+        uses: actions/checkout@v6
+
+      - name: Checkout JUCE 8.0.15
+        uses: actions/checkout@v6
+        with:
+          repository: juce-framework/JUCE
+          ref: 8.0.15
+          path: JUCE
+          fetch-depth: 1
+
+      - name: Tool versions
+        run: |
+          cmake --version
+          xcodebuild -version
+          git --version
+
+      - name: Configure universal build
+        run: >-
+          cmake -S . -B build-macos -G Xcode
+          -DFETCHCONTENT_SOURCE_DIR_JUCE="${{ github.workspace }}/JUCE"
+          -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"
+          -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0
+
+      - name: Build
+        run: cmake --build build-macos --config Release --target AKNStepFilter_VST3 --parallel 2
+
+      - name: Package and verify architectures
+        run: python3 tools/PackageMac.py --build-dir build-macos --out-dir dist
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: AKN-Step-Filter-macOS-Universal
+          path: dist/AKN-Step-Filter-macOS-Universal.zip
+          if-no-files-found: error
